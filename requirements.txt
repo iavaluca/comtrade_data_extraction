@@ -1,0 +1,11 @@
+comtradeapicall  # For interacting with the UN Comtrade API
+linearmodels  # For panel regression models
+numpy  # For numerical computations
+pandas  # For data manipulation and analysis
+requests  # For making HTTP requests
+
+# Optional: Unicode handling (if needed for special folder names)
+unicodedata2  # For normalizing folder names (used in `dataAPI.py`)
+
+# Typing utilities (only for older Python versions)
+typing-extensions  # For type hints (if using Python <3.9)
