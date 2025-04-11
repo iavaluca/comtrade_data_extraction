@@ -289,24 +289,24 @@ flows = {
 
 # TODO: delete flows
 # TODO: code refactoring need
-def bulkMethod(key: str, directory: str, frequency: str, period: str, reporter: str):
+def bulkMethod(key: str, directory: str, frequency: str, period: str, reporter: tuple):
    """
    @key: str
    @directory: str
    @frequency: str
    @period: str
-   @reporter: str
+   @reporter: tuple
    
    Retrieve data in bulk. Access to the premium API is required.
    """
    
    try:
-       os.mkdir(os.path.join(directory, reporter))
+       os.mkdir(os.path.join(directory, reporter.name))
    except FileExistsError:
        pass
    
    # Temp directory to store text files
-   temp_directory = TemporaryDirectory(dir = os.path.join(directory, reporter))
+   temp_directory = TemporaryDirectory(dir = os.path.join(directory, reporter.name))
    
    request =  comtradeapicall.bulkDownloadFinalFile(
                                                     subscription_key = key,
@@ -317,7 +317,7 @@ def bulkMethod(key: str, directory: str, frequency: str, period: str, reporter: 
                                                     # Harmonised System
                                                     clCode = 'HS',
                                                     period = period,
-                                                    reporterCode = countries.get(reporter),
+                                                    reporterCode = reporter.code,
                                                     decompress = True
                                                     )
    
@@ -333,7 +333,7 @@ def bulkMethod(key: str, directory: str, frequency: str, period: str, reporter: 
            
            for f in folders:
                try:
-                   os.makedirs(os.path.join(directory,reporter,f,flows.get(g)))
+                   os.makedirs(os.path.join(directory,reporter.name,f,flows.get(g)))
                except FileExistsError:
                    pass
            
@@ -349,13 +349,13 @@ def bulkMethod(key: str, directory: str, frequency: str, period: str, reporter: 
            
                
            df.to_stata(
-                        path = f'{os.path.join(directory, reporter, "Stata", flows.get(g), t + ".dta")}',
+                        path = f'{os.path.join(directory, reporter.name, "Stata", flows.get(g), t + ".dta")}',
                         # version = 117,
                         # Prevent to block writing process if columns are fully empty
                         # convert_strl = df.columns[df.isnull().all()].to_list()
                         )
             # Parquet
-           df.to_parquet(path = f'{os.path.join(directory, reporter, "Parquet", flows.get(g), t + ".parquet.gzip")}', compression = 'gzip') 
+           df.to_parquet(path = f'{os.path.join(directory, reporter.name, "Parquet", flows.get(g), t + ".parquet.gzip")}', compression = 'gzip') 
              
    return request
    

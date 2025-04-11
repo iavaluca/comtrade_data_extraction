@@ -1,3 +1,4 @@
+from collections import namedtuple
 import io
 import logging
 import os
@@ -86,6 +87,8 @@ class dataAPI:
         Fetch data from the API and store it locally.
         """
         data = []
+        # Pass named tuple as reporter
+        Reporter = namedtuple('Reporter', ['name','code'])
         for period in self.period:
             for country in self.countries:
                 logging.info(f"Fetching data for {country} for period {period}...")
@@ -98,7 +101,9 @@ class dataAPI:
                             directory=self.data_path,
                             frequency=self.frequency,
                             period=period,
-                            reporter=country,
+                            reporter=Reporter(name=country,
+                                              code=self.countries.get(country)
+                                              ),
                             # TODO: to reactivate
                             # flow=self.flows,
                             # partners=self.partners,
