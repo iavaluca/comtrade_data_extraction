@@ -7,7 +7,7 @@ countries = df_countries.set_index("PartnerDesc")["PartnerCode"].to_dict()
 # Define configuration as a dictionary
 config = {
     # API key (must be provided by the user)
-    "api_key": "4bd535229ce04052bd757b74eea69f27",  # Replace with your actual API key
+    # "api_key": "",  # Replace with your actual API key
     # Choose between 'bulk' or 'batch'
     "method": "bulk",
     # Choose between 'A' (Annual) and 'M' (Monthly)
