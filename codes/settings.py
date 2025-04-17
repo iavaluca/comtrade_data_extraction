@@ -1,4 +1,35 @@
 import comtradeapicall
+from pathlib import Path
+from dotenv import load_dotenv
+import os
+
+
+def load_environment_variables():
+    """
+    Load environment variables from the .env file.
+    Raises a ValueError if the COMTRADE_API_KEY is missing.
+    """
+    # Use pathlib to construct the path
+    dotenv_path = Path(__file__).resolve().parent.parent / ".env.txt"
+    print(f"DEBUG: Attempting to load .env file from: {dotenv_path}")  # Debug statement
+
+    if not dotenv_path.exists():
+        raise FileNotFoundError(f".env file not found at: {dotenv_path}")
+
+    load_dotenv(dotenv_path=dotenv_path)
+
+    api_key = os.getenv("COMTRADE_API_KEY")
+    if not api_key:
+        raise ValueError(
+            "API key is missing. Please set the COMTRADE_API_KEY environment variable in the .env file."
+        )
+
+    return api_key
+
+
+# Load environment variables
+api_key = load_environment_variables()
+print("Environment variables loaded successfully.")
 
 # Define set of countries of interest
 df_countries = comtradeapicall.getReference("partner")[["PartnerCode", "PartnerDesc"]]
@@ -6,8 +37,8 @@ countries = df_countries.set_index("PartnerDesc")["PartnerCode"].to_dict()
 
 # Define configuration as a dictionary
 config = {
-    # API key (must be provided by the user)
-    # "api_key": "",  # Replace with your actual API key
+    # API key (must be provided via environment variable)
+    "api_key": api_key,  # Fetch API key from environment variable
     # Choose between 'bulk' or 'batch'
     "method": "bulk",
     # Choose between 'A' (Annual) and 'M' (Monthly)
