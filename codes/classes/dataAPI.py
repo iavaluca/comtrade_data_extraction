@@ -8,7 +8,7 @@ from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
 from typing import Union
 import unicodedata
-from codes.functions.getData import getData, checkStatus
+from codes.functions.getData import getData, checkStatus, singleFileAggregation
 from codes.settings import config
 
 def get_session_with_retries():
@@ -83,6 +83,7 @@ class dataAPI:
         self.data_path = getFolder("data")
         self.stata_files = config["stata_files"]
         self.typeCode = config["typeCode"]
+        self.single_file = config["single_file"]
 
     def fetch_data(self):
         """
@@ -119,6 +120,16 @@ class dataAPI:
                     logging.info(f"Data for {country} for period {period} fetched successfully.")
                 except Exception as e:
                     logging.error(f"Failed to fetch data for {country} for period {period}: {e}")
+            # Check if a single file is requested (only for bulk method for now)
+            # TODO: implement for batch method
+            if self.single_file and self.method == "bulk":
+                logging.info("Aggregating data across countries into a single file...")
+                singleFileAggregation(
+                    directory=self.data_path,
+                    frequency=self.frequency,
+                    period=period,
+                    typeCode=self.typeCode,
+                )
         return data
 
     def __repr__(self):

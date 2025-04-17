@@ -4,6 +4,7 @@ from itertools import product
 import logging
 import os
 import pandas as pd
+import polars as pl
 from tempfile import TemporaryDirectory
 
 # Get countries conversion in M-49 code based on the excel file used as input.
@@ -287,9 +288,45 @@ flows = {
         'FM': 'Foreign Import'
          }
 
+
+def saveBulkFiles(
+    df: pd.DataFrame,
+    stata_files: bool,
+    stata_path: str,
+    parquet_path: str,
+):
+    # Write files
+    # Stata          
+    t = df['period'].drop_duplicates().to_string(index = False)
+    if len(str(t)) > 4:
+        t = str(t)[:4] + '_' + str(t)[-2:]
+    else:
+        t = str(t)
+    
+    if stata_files:
+        df.to_stata(
+            path = f'{os.path.join(stata_path, t + ".dta")}',
+            write_index=False,
+            # version = 117,
+            # Prevent to block writing process if columns are fully empty
+            # convert_strl = df.columns[df.isnull().all()].to_list()
+        )
+    # Parquet
+    df.to_parquet(path = f'{os.path.join(parquet_path, t + ".parquet.gzip")}', compression = 'gzip', index=False)
+
+
+
 # TODO: delete flows
 # TODO: code refactoring need
-def bulkMethod(key: str, directory: str, frequency: str, period: str, reporter: tuple, stata_files: bool, typeCode: str):
+def bulkMethod(
+    key: str,
+    directory: str,
+    frequency: str,
+    period: str,
+    reporter: tuple,
+    stata_files: bool,
+    typeCode: str,
+):
     """
     @key: str
     @directory: str
@@ -309,7 +346,7 @@ def bulkMethod(key: str, directory: str, frequency: str, period: str, reporter: 
     
     # Temp directory to store text files
     temp_directory = TemporaryDirectory(dir = os.path.join(directory, reporter.name))
-    
+
     request =  comtradeapicall.bulkDownloadFinalFile(
         subscription_key = key,
         directory = temp_directory.name,
@@ -329,6 +366,7 @@ def bulkMethod(key: str, directory: str, frequency: str, period: str, reporter: 
     # Folders where to store the data
     folders = ['Parquet','Stata'] if stata_files else ['Parquet']
 
+    # Check that the report values are not the ones from the override when a single file is requested
     for file in files:
         data = pd.read_csv(file, sep = '\t', dtype = {'cmdCode': str}).groupby(['flowCode'])
         for g in data.groups:
@@ -342,24 +380,51 @@ def bulkMethod(key: str, directory: str, frequency: str, period: str, reporter: 
             df = data.get_group(g).sort_values(by = ['primaryValue'], ascending = False)
             
             # Write files
-            # Stata          
-            t = df['period'].drop_duplicates().to_string(index = False)
-            if len(str(t)) > 4:
-                t = str(t)[:4] + '_' + str(t)[-2:]
-            else:
-                t = str(t)
-
-            if stata_files:
-                df.to_stata(
-                    path = f'{os.path.join(directory, reporter.name, "Stata", typeCode, flows.get(g), t + ".dta")}',
-                    # version = 117,
-                    # Prevent to block writing process if columns are fully empty
-                    # convert_strl = df.columns[df.isnull().all()].to_list()
-                )
-            # Parquet
-            df.to_parquet(path = f'{os.path.join(directory, reporter.name, "Parquet", typeCode, flows.get(g), t + ".parquet.gzip")}', compression = 'gzip') 
-
+            saveBulkFiles(
+                df = df,
+                stata_files = stata_files,
+                stata_path = os.path.join(directory, reporter.name, "Stata", typeCode, flows.get(g)),
+                parquet_path = os.path.join(directory, reporter.name, "Parquet", typeCode, flows.get(g))
+            )
+    
     return request
+
+def singleFileAggregation(
+    directory: str,
+    frequency: str,
+    period: str,
+    typeCode: str,
+):
+    """Concatenate all dataframes if single file is required.
+
+    Args:
+        directory (str): Path to the directory where the data is stored.
+        frequency (str): Frequency of the data (e.g., 'M' for monthly, 'A' for annual).
+        period (str): Time period for which the data is requested.
+        typeCode (str): Type of data (e.g., 'C' for commodity, 'S' for service).
+    """
+    # Update files list
+    if frequency == 'M':
+        list_periods = [str(t)[:4] + '_' + str(t)[-2:] for t in period.split(',')]
+    elif frequency == 'A':
+        list_periods = [period]
+    for g in flows.keys():
+        for t in list_periods:
+            files = glob.glob(f'{directory}/*/Parquet/{typeCode}/{flows.get(g)}/{t}.parquet.gzip')
+            if len(files) > 0:
+                try:
+                    df = pl.scan_parquet(files).collect()
+                    # Create the "All" folder
+                    try:
+                        os.makedirs(os.path.join(directory,"All",typeCode,flows.get(g)))
+                    except FileExistsError:
+                        pass
+                    # Write files
+                    df.write_parquet(f'{os.path.join(directory,"All",typeCode,flows.get(g),str(t) + ".parquet.gzip")}', compression = 'gzip')
+                except ValueError:
+                    logging.info(f'No data for {g} in {t}.')
+                    continue
+
 
 def batchMethod(key: str, 
     directory: str, 
@@ -370,7 +435,7 @@ def batchMethod(key: str,
     flow: str, 
     partners: list,
     stata_files: bool,
-    typeCode: str
+    typeCode: str,
 ):
     """
     @key:str

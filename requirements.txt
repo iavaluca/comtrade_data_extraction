@@ -3,6 +3,7 @@ fastparquet # For parquet files
 linearmodels  # For panel regression models
 numpy  # For numerical computations
 pandas  # For data manipulation and analysis
+polars # For fast DataFrame operations
 pyarrow # For parquet files
 python-dotenv # For environment variables
 requests  # For making HTTP requests

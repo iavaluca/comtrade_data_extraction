@@ -59,5 +59,7 @@ config = {
     # Choose between 2 and 4 (6 to be implemented)
     "hscode": 2,
     # Choose whether to write stata files or not (True/False)
-    "stata_files": True,
+    "stata_files": False,
+    # Choose  whether to write a single file with all reports and flows or not (True/False)
+    "single_file": True,
 }
