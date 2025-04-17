@@ -289,7 +289,7 @@ flows = {
 
 # TODO: delete flows
 # TODO: code refactoring need
-def bulkMethod(key: str, directory: str, frequency: str, period: str, reporter: tuple, stata_files: bool):
+def bulkMethod(key: str, directory: str, frequency: str, period: str, reporter: tuple, stata_files: bool, typeCode: str):
     """
     @key: str
     @directory: str
@@ -297,6 +297,7 @@ def bulkMethod(key: str, directory: str, frequency: str, period: str, reporter: 
     @period: str
     @reporter: tuple
     @stata_files: bool
+    @typeCode: str
     
     Retrieve data in bulk. Access to the premium API is required.
     """
@@ -313,7 +314,7 @@ def bulkMethod(key: str, directory: str, frequency: str, period: str, reporter: 
         subscription_key = key,
         directory = temp_directory.name,
         # Goods
-        typeCode = 'C',
+        typeCode = typeCode,
         freqCode = frequency,
         # Harmonised System
         clCode = 'HS',
@@ -334,7 +335,7 @@ def bulkMethod(key: str, directory: str, frequency: str, period: str, reporter: 
             
             for f in folders:
                 try:
-                    os.makedirs(os.path.join(directory,reporter.name,f,flows.get(g)))
+                    os.makedirs(os.path.join(directory,reporter.name,f,typeCode,flows.get(g)))
                 except FileExistsError:
                     pass
             
@@ -350,13 +351,13 @@ def bulkMethod(key: str, directory: str, frequency: str, period: str, reporter: 
 
             if stata_files:
                 df.to_stata(
-                    path = f'{os.path.join(directory, reporter.name, "Stata", flows.get(g), t + ".dta")}',
+                    path = f'{os.path.join(directory, reporter.name, "Stata", typeCode, flows.get(g), t + ".dta")}',
                     # version = 117,
                     # Prevent to block writing process if columns are fully empty
                     # convert_strl = df.columns[df.isnull().all()].to_list()
                 )
             # Parquet
-            df.to_parquet(path = f'{os.path.join(directory, reporter.name, "Parquet", flows.get(g), t + ".parquet.gzip")}', compression = 'gzip') 
+            df.to_parquet(path = f'{os.path.join(directory, reporter.name, "Parquet", typeCode, flows.get(g), t + ".parquet.gzip")}', compression = 'gzip') 
 
     return request
 
@@ -368,7 +369,8 @@ def batchMethod(key: str,
     hscode: int,
     flow: str, 
     partners: list,
-    stata_files: bool
+    stata_files: bool,
+    typeCode: str
 ):
     """
     @key:str
@@ -379,6 +381,7 @@ def batchMethod(key: str,
     @flow: str
     @partners: list
     @stata_files: bool
+    @typeCode: str
 
     Retrieve data in small batches.
     """
@@ -397,7 +400,7 @@ def batchMethod(key: str,
 
         request = comtradeapicall._getFinalData(
             subscription_key = key,
-            typeCode ='C', 
+            typeCode = typeCode, 
             freqCode = frequency,
             clCode = 'HS',
             period = period,
@@ -439,7 +442,7 @@ def batchMethod(key: str,
         
         for f in folders:
             try:
-                os.makedirs(os.path.join(directory,reporter,f,flows.get(g[0][0])))
+                os.makedirs(os.path.join(directory,reporter,f,typeCode,flows.get(g[0][0])))
             except FileExistsError:
                 pass
         
@@ -455,13 +458,13 @@ def batchMethod(key: str,
 
         if stata_files:
             df.to_stata(
-                path = f'{os.path.join(directory, reporter, "Stata", flows.get(g[0][0]), t + ".dta")}',
+                path = f'{os.path.join(directory, reporter, "Stata", typeCode, flows.get(g[0][0]), t + ".dta")}',
                 version = 117,
                 # Prevent to block writing process if columns are fully empty
                 # convert_strl = df.columns[df.isnull().all()].to_list()
             )
         # Parquet
-        df.to_parquet(path = f'{os.path.join(directory, reporter, "Parquet", flows.get(g[0][0]), t + ".parquet.gzip")}', compression = 'gzip')   
+        df.to_parquet(path = f'{os.path.join(directory, reporter, "Parquet", typeCode, flows.get(g[0][0]), t + ".parquet.gzip")}', compression = 'gzip')   
     
     
     return request

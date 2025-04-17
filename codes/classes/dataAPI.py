@@ -82,6 +82,7 @@ class dataAPI:
         self.period = getPeriod(frequency=self.frequency, years=self.years, months=self.months)
         self.data_path = getFolder("data")
         self.stata_files = config["stata_files"]
+        self.typeCode = config["typeCode"]
 
     def fetch_data(self):
         """
@@ -107,6 +108,7 @@ class dataAPI:
                                 code=self.countries.get(country)
                             ),
                             stata_files=self.stata_files,
+                            typeCode=self.typeCode,
                             # TODO: to reactivate
                             # flow=self.flows,
                             # partners=self.partners,

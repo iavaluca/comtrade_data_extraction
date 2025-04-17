@@ -41,6 +41,9 @@ config = {
     "api_key": api_key,  # Fetch API key from environment variable
     # Choose between 'bulk' or 'batch'
     "method": "bulk",
+    # Choose typeCode 'C' for commodity or 'S' for service
+    # NOTE: 'S' is available only for 'A' (Annual) frequency so select 'A' below
+    "typeCode": "C",
     # Choose between 'A' (Annual) and 'M' (Monthly)
     "frequency": "M",
     # 'X' for exports, 'M' for imports

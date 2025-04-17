@@ -47,7 +47,7 @@ class dataCall:
         # Get data
         for country in countries:
             # TODO: implement a check if flow exists
-            flows = list(map(lambda flow: country / 'Parquet' / flow, self.flows))
+            flows = list(map(lambda flow: country / 'Parquet' / flow / 'C', self.flows))
             # Loop over flows
             for flow in flows:
                 files = flow.glob('*.parquet.gzip')
