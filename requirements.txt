@@ -4,6 +4,7 @@ linearmodels  # For panel regression models
 numpy  # For numerical computations
 pandas  # For data manipulation and analysis
 pyarrow # For parquet files
+python-dotenv # For environment variables
 requests  # For making HTTP requests
 
 # Optional: Unicode handling (if needed for special folder names)
