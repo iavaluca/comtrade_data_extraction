@@ -41,6 +41,9 @@ config = {
     "api_key": api_key,  # Fetch API key from environment variable
     # Choose between 'bulk' or 'batch'
     "method": "bulk",
+    # Choose typeCode 'C' for commodity or 'S' for service
+    # NOTE: 'S' is available only for 'A' (Annual) frequency so select 'A' below
+    "typeCode": "C",
     # Choose between 'A' (Annual) and 'M' (Monthly)
     "frequency": "M",
     # 'X' for exports, 'M' for imports
@@ -55,4 +58,8 @@ config = {
     "months": list(range(1, 12 + 1)),
     # Choose between 2 and 4 (6 to be implemented)
     "hscode": 2,
+    # Choose whether to write stata files or not (True/False)
+    "stata_files": False,
+    # Choose  whether to write a single file with all reports and flows or not (True/False)
+    "single_file": True,
 }

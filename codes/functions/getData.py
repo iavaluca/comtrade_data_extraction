@@ -4,6 +4,7 @@ from itertools import product
 import logging
 import os
 import pandas as pd
+import polars as pl
 from tempfile import TemporaryDirectory
 
 # Get countries conversion in M-49 code based on the excel file used as input.
@@ -287,156 +288,226 @@ flows = {
         'FM': 'Foreign Import'
          }
 
+
+def saveBulkFiles(
+    df: pd.DataFrame,
+    stata_files: bool,
+    stata_path: str,
+    parquet_path: str,
+):
+    # Write files
+    # Stata          
+    t = df['period'].drop_duplicates().to_string(index = False)
+    if len(str(t)) > 4:
+        t = str(t)[:4] + '_' + str(t)[-2:]
+    else:
+        t = str(t)
+    
+    if stata_files:
+        df.to_stata(
+            path = f'{os.path.join(stata_path, t + ".dta")}',
+            write_index=False,
+            # version = 117,
+            # Prevent to block writing process if columns are fully empty
+            # convert_strl = df.columns[df.isnull().all()].to_list()
+        )
+    # Parquet
+    df.to_parquet(path = f'{os.path.join(parquet_path, t + ".parquet.gzip")}', compression = 'gzip', index=False)
+
+
+
 # TODO: delete flows
 # TODO: code refactoring need
-def bulkMethod(key: str, directory: str, frequency: str, period: str, reporter: tuple):
-   """
-   @key: str
-   @directory: str
-   @frequency: str
-   @period: str
-   @reporter: tuple
-   
-   Retrieve data in bulk. Access to the premium API is required.
-   """
-   
-   try:
-       os.mkdir(os.path.join(directory, reporter.name))
-   except FileExistsError:
-       pass
-   
-   # Temp directory to store text files
-   temp_directory = TemporaryDirectory(dir = os.path.join(directory, reporter.name))
-   
-   request =  comtradeapicall.bulkDownloadFinalFile(
-                                                    subscription_key = key,
-                                                    directory = temp_directory.name,
-                                                    # Goods
-                                                    typeCode = 'C',
-                                                    freqCode = frequency,
-                                                    # Harmonised System
-                                                    clCode = 'HS',
-                                                    period = period,
-                                                    reporterCode = reporter.code,
-                                                    decompress = True
-                                                    )
-   
-   # Get files based on relative path and file extension to be filtered
-   files = glob.glob(f'{temp_directory.name}/**.txt')
-   
-   # Folders where to store the data
-   folders = ['Parquet','Stata']
-   
-   for file in files:
-       data = pd.read_csv(file, sep = '\t', dtype = {'cmdCode': str}).groupby(['flowCode'])
-       for g in data.groups:
-           
-           for f in folders:
-               try:
-                   os.makedirs(os.path.join(directory,reporter.name,f,flows.get(g)))
-               except FileExistsError:
-                   pass
-           
-           df = data.get_group(g).sort_values(by = ['primaryValue'], ascending = False)
+def bulkMethod(
+    key: str,
+    directory: str,
+    frequency: str,
+    period: str,
+    reporter: tuple,
+    stata_files: bool,
+    typeCode: str,
+):
+    """
+    @key: str
+    @directory: str
+    @frequency: str
+    @period: str
+    @reporter: tuple
+    @stata_files: bool
+    @typeCode: str
+    
+    Retrieve data in bulk. Access to the premium API is required.
+    """
+    
+    try:
+        os.mkdir(os.path.join(directory, reporter.name))
+    except FileExistsError:
+        pass
+    
+    # Temp directory to store text files
+    temp_directory = TemporaryDirectory(dir = os.path.join(directory, reporter.name))
+
+    request =  comtradeapicall.bulkDownloadFinalFile(
+        subscription_key = key,
+        directory = temp_directory.name,
+        # Goods
+        typeCode = typeCode,
+        freqCode = frequency,
+        # Harmonised System
+        clCode = 'HS',
+        period = period,
+        reporterCode = reporter.code,
+        decompress = True
+    )
+
+    # Get files based on relative path and file extension to be filtered
+    files = glob.glob(f'{temp_directory.name}/**.txt')
+
+    # Folders where to store the data
+    folders = ['Parquet','Stata'] if stata_files else ['Parquet']
+
+    # Check that the report values are not the ones from the override when a single file is requested
+    for file in files:
+        data = pd.read_csv(file, sep = '\t', dtype = {'cmdCode': str}).groupby(['flowCode'])
+        for g in data.groups:
+            
+            for f in folders:
+                try:
+                    os.makedirs(os.path.join(directory,reporter.name,f,typeCode,flows.get(g)))
+                except FileExistsError:
+                    pass
+            
+            df = data.get_group(g).sort_values(by = ['primaryValue'], ascending = False)
             
             # Write files
-            # Stata          
-           t = df['period'].drop_duplicates().to_string(index = False)
-           if len(str(t)) > 4:
-               t = str(t)[:4] + '_' + str(t)[-2:]
-           else:
-               t = str(t)
-           
-               
-           df.to_stata(
-                        path = f'{os.path.join(directory, reporter.name, "Stata", flows.get(g), t + ".dta")}',
-                        # version = 117,
-                        # Prevent to block writing process if columns are fully empty
-                        # convert_strl = df.columns[df.isnull().all()].to_list()
-                        )
-            # Parquet
-           df.to_parquet(path = f'{os.path.join(directory, reporter.name, "Parquet", flows.get(g), t + ".parquet.gzip")}', compression = 'gzip') 
-             
-   return request
-   
-def batchMethod(key: str, 
-                directory: str, 
-                frequency: str, 
-                period: str, 
-                reporter: str,
-                hscode: int,
-                flow: str, 
-                partners: list
-                ):
-   """
-   @key:str
-   @frequency: str
-   @period: str
-   @reporter: str
-   @sector: int
-   @flow: str
-   @partners: list
-          
-   Retrieve data in small batches.
-   """
-   
-   # Temp directory
-   # To prevent disconnection from the network drive
-   temp_directory = TemporaryDirectory(dir = os.path.join(directory,reporter))
-   
-   # HS codes
-   if hscode == 2:
-       codes = [f'{c:>02}' for c in range(1,99+1)] + ['TOTAL']
-   elif hscode == 4:
-       codes = [''.join(c) for c in list(product([f'{c:>02}' for c in range(1,99+1)],[f'{c:>02}' for c in range(1,99+1)]))]
-   
-   for code in codes:
-       
-       request = comtradeapicall._getFinalData(
-                                              subscription_key = key,
-                                              typeCode ='C', 
-                                              freqCode = frequency,
-                                              clCode = 'HS',
-                                              period = period,
-                                              reporterCode = countries.get(reporter),
-                                              cmdCode = code,                                               
-                                              flowCode = flow,
-                                              partnerCode = ','.join([countries.get(p) for p in partners]),
-                                              partner2Code=None,
-                                              customsCode=None, 
-                                              motCode=None, 
-                                              # maxRecords=250000, 
-                                              format_output='JSON',
-                                              aggregateBy=None, 
-                                              breakdownMode='classic', 
-                                              countOnly=None, 
-                                              includeDesc=True
-                                              )
-       
-       if not request.empty:
-           request.to_parquet(path = f'{os.path.join(temp_directory.name, code + ".parquet.gzip")}', compression = 'gzip')
-           logging.info(f'Code {code} successfully downloaded.')
-       else:
-           logging.info(f'No data for code {code}.')
-           
-   # Get files based on relative path and file extension to be filtered
-   files = glob.glob(f'{temp_directory.name}/**.parquet.gzip')
-        
-   # Folders where to store the data
-   folders = ['Parquet','Stata']
-   
-   data = []
-   
-   for file in files:
-       data.append(pd.read_parquet(file))
-       
-   data = pd.concat(data).groupby(by = ['flowCode', 'period'])
+            saveBulkFiles(
+                df = df,
+                stata_files = stata_files,
+                stata_path = os.path.join(directory, reporter.name, "Stata", typeCode, flows.get(g)),
+                parquet_path = os.path.join(directory, reporter.name, "Parquet", typeCode, flows.get(g))
+            )
     
-   for g in data.groups:
+    return request
+
+def singleFileAggregation(
+    directory: str,
+    frequency: str,
+    period: str,
+    typeCode: str,
+):
+    """Concatenate all dataframes if single file is required.
+
+    Args:
+        directory (str): Path to the directory where the data is stored.
+        frequency (str): Frequency of the data (e.g., 'M' for monthly, 'A' for annual).
+        period (str): Time period for which the data is requested.
+        typeCode (str): Type of data (e.g., 'C' for commodity, 'S' for service).
+    """
+    # Update files list
+    if frequency == 'M':
+        list_periods = [str(t)[:4] + '_' + str(t)[-2:] for t in period.split(',')]
+    elif frequency == 'A':
+        list_periods = [period]
+    for g in flows.keys():
+        for t in list_periods:
+            files = glob.glob(f'{directory}/*/Parquet/{typeCode}/{flows.get(g)}/{t}.parquet.gzip')
+            if len(files) > 0:
+                try:
+                    df = pl.scan_parquet(files).collect()
+                    # Create the "All" folder
+                    try:
+                        os.makedirs(os.path.join(directory,"All",typeCode,flows.get(g)))
+                    except FileExistsError:
+                        pass
+                    # Write files
+                    df.write_parquet(f'{os.path.join(directory,"All",typeCode,flows.get(g),str(t) + ".parquet.gzip")}', compression = 'gzip')
+                except ValueError:
+                    logging.info(f'No data for {g} in {t}.')
+                    continue
+
+
+def batchMethod(key: str, 
+    directory: str, 
+    frequency: str, 
+    period: str, 
+    reporter: str,
+    hscode: int,
+    flow: str, 
+    partners: list,
+    stata_files: bool,
+    typeCode: str,
+):
+    """
+    @key:str
+    @frequency: str
+    @period: str
+    @reporter: str
+    @sector: int
+    @flow: str
+    @partners: list
+    @stata_files: bool
+    @typeCode: str
+
+    Retrieve data in small batches.
+    """
+
+    # Temp directory
+    # To prevent disconnection from the network drive
+    temp_directory = TemporaryDirectory(dir = os.path.join(directory,reporter))
+
+    # HS codes
+    if hscode == 2:
+        codes = [f'{c:>02}' for c in range(1,99+1)] + ['TOTAL']
+    elif hscode == 4:
+        codes = [''.join(c) for c in list(product([f'{c:>02}' for c in range(1,99+1)],[f'{c:>02}' for c in range(1,99+1)]))]
+    
+    for code in codes:
+
+        request = comtradeapicall._getFinalData(
+            subscription_key = key,
+            typeCode = typeCode, 
+            freqCode = frequency,
+            clCode = 'HS',
+            period = period,
+            reporterCode = countries.get(reporter),
+            cmdCode = code,                                               
+            flowCode = flow,
+            partnerCode = ','.join([countries.get(p) for p in partners]),
+            partner2Code=None,
+            customsCode=None, 
+            motCode=None, 
+            # maxRecords=250000, 
+            format_output='JSON',
+            aggregateBy=None, 
+            breakdownMode='classic', 
+            countOnly=None, 
+            includeDesc=True
+        )
+
+        if not request.empty:
+            request.to_parquet(path = f'{os.path.join(temp_directory.name, code + ".parquet.gzip")}', compression = 'gzip')
+            logging.info(f'Code {code} successfully downloaded.')
+        else:
+            logging.info(f'No data for code {code}.')
+
+    # Get files based on relative path and file extension to be filtered
+    files = glob.glob(f'{temp_directory.name}/**.parquet.gzip')
+        
+    # Folders where to store the data
+    folders = ['Parquet','Stata'] if stata_files else ['Parquet']
+
+    data = []
+
+    for file in files:
+        data.append(pd.read_parquet(file))
+        
+    data = pd.concat(data).groupby(by = ['flowCode', 'period'])
+    
+    for g in data.groups:
         
         for f in folders:
             try:
-                os.makedirs(os.path.join(directory,reporter,f,flows.get(g[0][0])))
+                os.makedirs(os.path.join(directory,reporter,f,typeCode,flows.get(g[0][0])))
             except FileExistsError:
                 pass
         
@@ -449,19 +520,19 @@ def batchMethod(key: str,
             t = str(t)[:4] + '_' + str(t)[-2:]
         else:
             t = str(t)
-        
-            
-        df.to_stata(
-                     path = f'{os.path.join(directory, reporter, "Stata", flows.get(g[0][0]), t + ".dta")}',
-                     version = 117,
-                     # Prevent to block writing process if columns are fully empty
-                     # convert_strl = df.columns[df.isnull().all()].to_list()
-                     )
-         # Parquet
-        df.to_parquet(path = f'{os.path.join(directory, reporter, "Parquet", flows.get(g[0][0]), t + ".parquet.gzip")}', compression = 'gzip')   
-   
-   
-   return request
+
+        if stata_files:
+            df.to_stata(
+                path = f'{os.path.join(directory, reporter, "Stata", typeCode, flows.get(g[0][0]), t + ".dta")}',
+                version = 117,
+                # Prevent to block writing process if columns are fully empty
+                # convert_strl = df.columns[df.isnull().all()].to_list()
+            )
+        # Parquet
+        df.to_parquet(path = f'{os.path.join(directory, reporter, "Parquet", typeCode, flows.get(g[0][0]), t + ".parquet.gzip")}', compression = 'gzip')   
+    
+    
+    return request
 
 
 funcs = {
